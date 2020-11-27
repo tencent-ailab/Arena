@@ -1,0 +1,13 @@
+*.pyc
+*_pb2.py
+__pychaces__
+
+.DS_Store
+
+.idea
+Arena.egg-info/
+*/__pycache__/
+sphinx/_build/
+
+_vizdoom.ini
+arena/env/_vizdoom/
