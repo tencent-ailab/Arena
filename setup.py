@@ -11,6 +11,7 @@ setup(
 
     install_requires=[
         'gym',
-        'pillow'
+        'pillow',
+        'pygame'
     ],
 )
