@@ -1,9 +1,8 @@
 """ Arena compatible vizdoom env """
-import os
 from copy import deepcopy
-import random
-from collections import deque, Counter
+from collections import deque
 from portpicker import pick_unused_port
+import logging
 
 from numpy.core._multiarray_umath import ndarray
 import vizdoom as vd
@@ -25,8 +24,10 @@ class PlayerEnv(gym.Env):
 
     Use Wu Yuxing's trick to enhance the action.
     TODO(pengsun): move the action-enhancement logic to an Interface?"""
-    def __init__(self, cfg):
+    def __init__(self, cfg, train_mode='frag'):
         self.cfg = cfg
+        assert train_mode in ['frag', 'navi'], 'Unknown train_mode {}'.format(train_mode)
+        self.train_mode = train_mode
         self.game = None
 
         self.observation_space = Box(low=0, high=255, dtype=np.uint8,
@@ -71,6 +72,10 @@ class PlayerEnv(gym.Env):
     def act(self, action):
         """Convert to Discrete(6) action to the full allowed action."""
         # TODO(pengsun): an Interface for the logic?
+        if self.train_mode == 'navi' and action == self.all_actions[1]:
+            # mute 'fire' action in the navigation mode
+            action = self.all_actions[2]
+
         self.last_history.append(action)
         is_attacking = (self.all_actions[1] in list(self.last_history)[-3:])
         # if is_attacking:
@@ -219,6 +224,7 @@ class VizdoomMPEnv(gym.Env):
                  num_players=2,
                  num_bots=0,
                  mode='train',
+                 train_mode='frag',
                  max_steps=2100,
                  episode_timeout=2100,
                  is_window_visible=False,
@@ -226,6 +232,7 @@ class VizdoomMPEnv(gym.Env):
 
         self.port = pick_unused_port()
         self.mode = mode
+        self.train_mode = train_mode
         # host cfg
         self.host_cfg = PlayerHostConfig(self.port)
         self.host_cfg.num_players = num_players
@@ -255,7 +262,7 @@ class VizdoomMPEnv(gym.Env):
         # TODO(jackzbzheng): add different observation wrappers
         self.envs = []
         for cfg in self.players_cfg:
-            e = PlayerEnv(cfg)
+            e = PlayerEnv(cfg, train_mode=self.train_mode)
             #e = RwdShapeWu2(e, dist_penalty_thres=3)
             self.envs.append(e)
         self.env = VecEnv(self.envs)
@@ -270,8 +277,12 @@ class VizdoomMPEnv(gym.Env):
         # print(infos)
         # Will be reassigned when game done in reward_wrapper
         infos['outcome'] = [0 for _ in range(len(self.players_cfg))]
-        infos['frag'] = [0 for _ in range(len(self.players_cfg))]
-        infos['navigation'] = [0 for _ in range(len(self.players_cfg))]
+
+        # TODO(meowli,ztjwxu,pythonsun): putting list in info is not supported, otherwise errors occur at Learner
+        #  when printing info.
+        # infos['frag'] = [0 for _ in range(len(self.players_cfg))]
+        # infos['navigation'] = [0 for _ in range(len(self.players_cfg))]
+
         # infos['outcome'] = [0]
         # infos['frag'] = [0]
         # infos['navigation'] = [0]
@@ -330,6 +341,7 @@ class VizdoomVecRwd(Wrapper):
         rwd_heal = 0
         rwd_shot1 = 0
         rwd_shot2 = 0
+        rwd_navi = 0
 
         frag_diff = game_var['FRAGCOUNT'] - game_var_pre['FRAGCOUNT']
         if frag_diff > 0:
@@ -406,8 +418,8 @@ class VizdoomVecRwd(Wrapper):
             self.adress_saver[i] = 0
         elif self.adress_saver[i] != self.adress_sum[i]:
             self.adress_saver[i] = self.adress_sum[i]
-            rwd_move = 1
-            # rwd_move = 0.05
+            rwd_move = 0
+            rwd_navi = 1
         # print('XXXXXXXXXXXXX')
         # print(game_var['POSITION_X'])
         # print('YYYYYYYYYYYYY')
@@ -440,8 +452,8 @@ class VizdoomVecRwd(Wrapper):
         # if rwd_find > 0:
         #     print('FIND: {} -> {} = {}'.format(game_var_pre['SECRETCOUNT'], game_var['SECRETCOUNT'], rwd_find))
 
-        return (reward, rwd_kill_frag, rwd_killed_frag, rwd_hit, rwd_hitt, rwd_heal, rwd_shot1, rwd_shot2, rwd_armo, rwd_move)
-
+        return (rwd_navi, rwd_kill_frag, rwd_killed_frag, rwd_hit, rwd_hitt, rwd_heal, rwd_shot1, rwd_shot2, rwd_armo,
+                rwd_move)
     def step(self, action):
         # print('Steps: {}'.format(self._step))
         self._step += 1
@@ -501,9 +513,14 @@ class VizdoomVecRwd(Wrapper):
                     outcome[FRAG_sort_index[i]] = -1
 
             info['outcome'] = outcome
+            # TODO(meowli,ztjwxu,pythonsun): putting list in info is not supported, otherwise errors occur at Learner
+            #  when printing info. As a temporary work-around, just print the info right here.
+            # as a work-around
             # info['debug'] = [1.0, 2.3, 43, 23.5, 412.4, 413, 41, 0.532]
-            info['frag'] = FRAG_arr
-            info['navigation'] = Navigate_arr
+            # info['frag'] = FRAG_arr
+            # info['navigation'] = Navigate_arr
+            logging.info('FRAG_arr: {}'.format(FRAG_arr))
+            logging.info('Navigate_arr: {}'.format(Navigate_arr))
             # Replace the original rwd_p[0] with outcome
             rwds = [(outcome[i],) + rwd_p[1:] for i, rwd_p in enumerate(rwds)]
             # print('--------[Done]--------')
