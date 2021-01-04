@@ -1,5 +1,3 @@
-from pysc2.lib.typeenums import UNIT_TYPEID
-from pysc2.lib.typeenums import UPGRADE_ID
 from arena.utils.constant import AllianceType
 import numpy as np
 
