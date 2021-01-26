@@ -209,7 +209,7 @@ class ActMaskObsInt(AppendObsInt):
                             if (self.in_board(further_pos) and
                                 obs['board'][further_pos] in self.pathing_items):
                                 act_mask[j + 1] = 1
-            act_mask[-1] = obs['ammo'] > 0 and obs['bomb_blast_strength'][pos] == 0
+                act_mask[-1] = obs['ammo'] > 0 and obs['bomb_blast_strength'][pos] == 0
             return obs_pre + (act_mask.reshape([-1]),)
 
     def build_wrapper(self):
