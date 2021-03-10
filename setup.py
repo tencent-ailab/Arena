@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='Arena',
-    version='1.0',
+    version='1.3',
     description='Arena',
     keywords='Arena',
     packages=[
